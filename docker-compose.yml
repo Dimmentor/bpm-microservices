@@ -1,0 +1,63 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    restart: always
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  user-service:
+    build: ./user-service
+    container_name: user-service
+    restart: always
+    env_file:
+      - ./user-service/.env
+    depends_on:
+      - postgres
+      - rabbitmq
+    command: sh -c "alembic upgrade head && uvicorn src.main:app --host 0.0.0.0 --port 8000"
+    ports:
+      - "8001:8000"
+
+  team-service:
+    build: ./team-service
+    container_name: team-service
+    restart: always
+    env_file:
+      - ./team-service/.env
+    depends_on:
+      - postgres
+      - rabbitmq
+    command: sh -c "alembic upgrade head && uvicorn src.main:app --host 0.0.0.0 --port 8000"
+    ports:
+      - "8002:8000"
+
+  task-service:
+    build: ./task-service
+    container_name: task-service
+    restart: always
+    env_file:
+      - ./task-service/.env
+    depends_on:
+      - postgres
+      - rabbitmq
+    command: sh -c "alembic upgrade head && uvicorn src.main:app --host 0.0.0.0 --port 8000"
+    ports:
+      - "8003:8000"
+
+volumes:
+  postgres_data:
