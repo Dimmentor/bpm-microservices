@@ -1,0 +1,27 @@
+[project]
+name = "calendar-service"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Dmitry Longinov",email = "dl.ruled@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.12,<4.0"
+dependencies = [
+    "fastapi (>=0.116.1,<0.117.0)",
+    "sqladmin (>=0.21.0,<0.22.0)",
+    "sqlalchemy (>=2.0.42,<3.0.0)",
+    "alembic (>=1.16.4,<2.0.0)",
+    "uvicorn (>=0.35.0,<0.36.0)",
+    "asyncpg (>=0.30.0,<0.31.0)",
+    "dotenv (>=0.9.9,<0.10.0)",
+    "pydantic[email] (>=2.11.7,<3.0.0)",
+    "python-jose[cryptography] (>=3.3.0,<4.0.0)",
+    "passlib[bcrypt] (>=1.7.4,<2.0.0)",
+    "aio-pika (>=9.4.0,<10.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
