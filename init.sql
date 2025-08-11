@@ -1,3 +1,4 @@
 CREATE DATABASE user_db;
 CREATE DATABASE team_db;
 CREATE DATABASE task_db;
+CREATE DATABASE calendar_db;

@@ -1,63 +1,88 @@
 services:
   postgres:
     image: postgres:17-alpine
-    container_name: postgres
-    restart: always
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: bpm_db
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - bpm-network
 
   rabbitmq:
     image: rabbitmq:3-management
-    container_name: rabbitmq
-    restart: always
     ports:
       - "5672:5672"
       - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: admin
+    networks:
+      - bpm-network
 
   user-service:
     build: ./user-service
-    container_name: user-service
-    restart: always
-    env_file:
-      - ./user-service/.env
+    ports:
+      - "8001:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/user_db
+      RABBITMQ_URL: amqp://admin:admin@rabbitmq:5672/
     depends_on:
       - postgres
       - rabbitmq
-    command: sh -c "alembic upgrade head && uvicorn src.main:app --host 0.0.0.0 --port 8000"
-    ports:
-      - "8001:8000"
+    networks:
+      - bpm-network
 
   team-service:
     build: ./team-service
-    container_name: team-service
-    restart: always
-    env_file:
-      - ./team-service/.env
+    ports:
+      - "8002:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/team_db
+      RABBITMQ_URL: amqp://admin:admin@rabbitmq:5672/
     depends_on:
       - postgres
       - rabbitmq
-    command: sh -c "alembic upgrade head && uvicorn src.main:app --host 0.0.0.0 --port 8000"
-    ports:
-      - "8002:8000"
+    networks:
+      - bpm-network
 
   task-service:
     build: ./task-service
-    container_name: task-service
-    restart: always
-    env_file:
-      - ./task-service/.env
+    ports:
+      - "8003:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/task_db
+      RABBITMQ_URL: amqp://admin:admin@rabbitmq:5672/
     depends_on:
       - postgres
       - rabbitmq
-    command: sh -c "alembic upgrade head && uvicorn src.main:app --host 0.0.0.0 --port 8000"
+    networks:
+      - bpm-network
+
+  calendar-service:
+    build: ./calendar-service
     ports:
-      - "8003:8000"
+      - "8004:8000"
+    environment:
+      DB_NAME: calendar_db
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASS: postgres
+      RABBIT_URL: amqp://admin:admin@rabbitmq:5672/
+    depends_on:
+      - postgres
+      - rabbitmq
+    networks:
+      - bpm-network
 
 volumes:
   postgres_data:
+
+networks:
+  bpm-network:
+    driver: bridge

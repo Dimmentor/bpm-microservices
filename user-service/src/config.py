@@ -13,4 +13,4 @@ JWT_SECRET = os.getenv('JWT_SECRET', 'secret')
 JWT_ALGORITHM = os.getenv('JWT_ALGORITHM', 'HS256')
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv('ACCESS_TOKEN_EXPIRE_MINUTES', 1440))
 
-RABBIT_URL = os.getenv('RABBIT_URL', 'amqp://guest:guest@localhost/')
+RABBIT_URL = os.getenv('RABBIT_URL', 'amqp://admin:admin@localhost/')

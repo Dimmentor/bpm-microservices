@@ -8,4 +8,4 @@ DB_PORT = os.getenv('DB_PORT', '5432')
 DB_USER = os.getenv('DB_USER', 'task_user')
 DB_PASS = os.getenv('DB_PASS', 'task_pass')
 
-RABBIT_URL = os.getenv('RABBIT_URL', 'amqp://guest:guest@localhost/')
+RABBIT_URL = os.getenv('RABBIT_URL', 'amqp://admin:admin@localhost/')

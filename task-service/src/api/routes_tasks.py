@@ -1,11 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, update
 from src.db.database import get_db
 from src.db.models import Task, TaskComment, TaskEvaluation
-from src.api.schemas import TaskCreate, TaskOut, CommentCreate, EvaluationCreate
+from src.api.schemas import TaskCreate, TaskOut, CommentCreate, EvaluationCreate, TaskUpdate
 from src.services.rabbitmq import publish_event
-from statistics import mean
 
 router = APIRouter()
 
@@ -25,6 +24,20 @@ async def create_task(payload: TaskCreate, db: AsyncSession = Depends(get_db)):
     await db.refresh(task)
     # publish event
     await publish_event("task.created", {"task_id": task.id, "assignee_id": task.assignee_id})
+    return task
+
+
+@router.put("/tasks/{task_id}", response_model=TaskOut)
+async def update_task(task_id: int, payload: TaskUpdate, db: AsyncSession = Depends(get_db)):
+    res = await db.execute(select(Task).where(Task.id == task_id))
+    task = res.scalar_one_or_none()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    update_data = payload.dict(exclude_unset=True)
+    if update_data:
+        await db.execute(update(Task).where(Task.id == task_id).values(**update_data))
+        await db.commit()
+        await db.refresh(task)
     return task
 
 

@@ -11,7 +11,8 @@ admin = Admin(app, engine)
 
 class UserAdmin(ModelView, model=User):
     column_list = [User.id, User.email, User.name, User.hashed_password, User.role, User.status, User.team_id,
-                   User.created_at]
+                   User.invite_code, User.phone, User.position, User.department,
+                   User.created_at, User.updated_at]
 
 
 admin.add_view(UserAdmin)
