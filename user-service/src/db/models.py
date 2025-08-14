@@ -23,9 +23,9 @@ class User(Base):
     name = Column(String, nullable=True)
     hashed_password = Column(String, nullable=False)
     role = Column(Enum(UserRole), default=UserRole.USER)
-    status = Column(Enum(UserStatus), default=UserStatus.ACTIVE)
+    status = Column(Enum(UserStatus), default=UserStatus.PENDING)
     team_id = Column(Integer, nullable=True)
-    invite_code = Column(String, nullable=True)  # Код приглашения для регистрации
+    invite_code = Column(String, nullable=True)
     phone = Column(String, nullable=True)
     position = Column(String, nullable=True)
     department = Column(String, nullable=True)

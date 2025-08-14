@@ -3,6 +3,15 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
+class Settings:
+    DATABASE_URL = os.getenv("DATABASE_URL")
+    RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://admin:admin@rabbitmq:5672/")
+    TEAM_SERVICE_URL = os.getenv("TEAM_SERVICE_URL", "http://team-service:8000")
+
+
+settings = Settings()
+
 DB_NAME = os.getenv('DB_NAME')
 DB_HOST = os.getenv('DB_HOST')
 DB_PORT = os.getenv('DB_PORT')
@@ -13,4 +22,4 @@ JWT_SECRET = os.getenv('JWT_SECRET', 'secret')
 JWT_ALGORITHM = os.getenv('JWT_ALGORITHM', 'HS256')
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv('ACCESS_TOKEN_EXPIRE_MINUTES', 1440))
 
-RABBIT_URL = os.getenv('RABBIT_URL', 'amqp://admin:admin@localhost/')
+RABBITMQ_URL = os.getenv('RABBITMQ_URL', 'amqp://admin:admin@rabbitmq:5672/')

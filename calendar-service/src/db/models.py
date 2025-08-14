@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Boolean, Enum
+from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean, Enum, JSON
 from sqlalchemy.sql import func
 from src.db.database import Base
 import enum
@@ -23,32 +23,30 @@ class CalendarEvent(Base):
     __tablename__ = "calendar_events"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, nullable=False)  # Владелец события
     title = Column(String, nullable=False)
     description = Column(Text, nullable=True)
-    event_type = Column(Enum(EventType), default=EventType.OTHER)
+    event_type = Column(Enum(EventType), nullable=False)
     status = Column(Enum(EventStatus), default=EventStatus.SCHEDULED)
 
-    # Время события
+    # Временные параметры
     start_at = Column(DateTime(timezone=True), nullable=False)
     end_at = Column(DateTime(timezone=True), nullable=False)
+    is_all_day = Column(Boolean, default=False)
+    is_recurring = Column(Boolean, default=False)
+    recurring_pattern = Column(String, nullable=True)
 
-    # Связи с другими сервисами
-    task_id = Column(Integer, nullable=True)  # Связь с задачей
-    meeting_id = Column(Integer, nullable=True)  # Связь со встречей
+    # Связи с другими сущностями
+    user_id = Column(Integer, nullable=False)  # Владелец события
+    task_id = Column(Integer, nullable=True)  # Для событий-задач
     team_id = Column(Integer, nullable=True)  # Команда
     org_unit_id = Column(Integer, nullable=True)  # Подразделение
 
-    # Дополнительные поля
+    # Поля для встреч (ранее были в Meeting)
     location = Column(String, nullable=True)
-    is_all_day = Column(Boolean, default=False)
-    is_recurring = Column(Boolean, default=False)
-    recurring_pattern = Column(String, nullable=True)  # daily, weekly, monthly
-    recurring_end_date = Column(DateTime(timezone=True), nullable=True)
+    meeting_type = Column(String, nullable=True, default="general")
+    participants = Column(JSON, nullable=True)  # Список ID участников
 
-    # Участники (JSON массив user_id)
-    participants = Column(String, nullable=True)  # JSON array of user IDs
-
+    # Системные поля
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

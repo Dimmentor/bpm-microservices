@@ -1,7 +1,8 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, JSON, Float, Enum, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, Date, Text, JSON, Float, Enum, Boolean
 from sqlalchemy.sql import func
 from src.db.database import Base
 import enum
+
 
 class TaskStatus(enum.Enum):
     CREATED = "created"
@@ -10,19 +11,21 @@ class TaskStatus(enum.Enum):
     COMPLETED = "completed"
     CANCELLED = "cancelled"
 
+
 class TaskPriority(enum.Enum):
     LOW = 1
     MEDIUM = 2
     HIGH = 3
     URGENT = 4
 
+
 class Task(Base):
     __tablename__ = "tasks"
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, nullable=False)
     description = Column(Text)
-    creator_id = Column(Integer, nullable=False)  # user-service id
-    assignee_id = Column(Integer, nullable=True)  # user-service id
+    creator_id = Column(Integer, nullable=False)
+    assignee_id = Column(Integer, nullable=True)
     team_id = Column(Integer, nullable=True)
     org_unit_id = Column(Integer, nullable=True)
     status = Column(Enum(TaskStatus), default=TaskStatus.CREATED)
@@ -42,7 +45,7 @@ class TaskComment(Base):
     task_id = Column(Integer, nullable=False)
     author_id = Column(Integer, nullable=False)
     text = Column(Text, nullable=False)
-    is_internal = Column(Boolean, default=False)  # Внутренний комментарий
+    is_internal = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -57,46 +60,37 @@ class TaskEvaluation(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
-class Meeting(Base):
-    __tablename__ = "meetings"
-    id = Column(Integer, primary_key=True, index=True)
-    title = Column(String, nullable=False)
-    description = Column(Text, nullable=True)
-    creator_id = Column(Integer, nullable=False)
-    team_id = Column(Integer, nullable=True)
-    org_unit_id = Column(Integer, nullable=True)
-    start_at = Column(DateTime(timezone=True), nullable=False)
-    end_at = Column(DateTime(timezone=True), nullable=False)
-    location = Column(String, nullable=True)
-    meeting_type = Column(String, default="general")  # general, standup, review, etc.
-    is_recurring = Column(Boolean, default=False)
-    recurring_pattern = Column(String, nullable=True)  # daily, weekly, monthly
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-
-
 class MeetingParticipant(Base):
     __tablename__ = "meeting_participants"
     id = Column(Integer, primary_key=True, index=True)
     meeting_id = Column(Integer, nullable=False)
     user_id = Column(Integer, nullable=False)
-    status = Column(String, default="pending")  # pending, accepted, declined, attended
-    role = Column(String, default="participant")  # participant, organizer, presenter
+    status = Column(String, default="pending")
+    role = Column(String, default="participant")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
 class UserPerformance(Base):
     __tablename__ = "user_performance"
-    id = Column(Integer, primary_key=True, index=True)
+
+    id = Column(Integer, primary_key=True)
     user_id = Column(Integer, nullable=False)
-    team_id = Column(Integer, nullable=True)
-    org_unit_id = Column(Integer, nullable=True)
-    period_start = Column(DateTime(timezone=True), nullable=False)  # Начало периода (квартал)
-    period_end = Column(DateTime(timezone=True), nullable=False)    # Конец периода
-    total_tasks = Column(Integer, default=0)
-    completed_tasks = Column(Integer, default=0)
-    average_score = Column(Float, default=0.0)
-    total_score = Column(Float, default=0.0)
-    evaluations_count = Column(Integer, default=0)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    period_start = Column(Date, nullable=False)
+    period_end = Column(Date, nullable=False)
+
+    # Основные метрики
+    metrics = Column(JSON, nullable=False, default={
+        "total_tasks": 0,
+        "completed_tasks": 0,
+        "average_scores": {
+            "timeliness": 0.0,
+            "quality": 0.0,
+            "communication": 0.0
+        },
+        "total_score": 0.0
+    })
+
+    comparison = Column(JSON, nullable=True)
+
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, onupdate=func.now())

@@ -16,4 +16,4 @@ JWT_ALGORITHM = os.getenv('JWT_ALGORITHM', 'HS256')
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv('ACCESS_TOKEN_EXPIRE_MINUTES', 1440))
 
 # RabbitMQ configuration
-RABBIT_URL = os.getenv('RABBIT_URL', 'amqp://admin:admin@rabbitmq:5672/')
+RABBITMQ_URL = os.getenv('RABBITMQ_URL', 'amqp://admin:admin@rabbitmq:5672/')

@@ -1,6 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+import logging
+import httpx as httpx
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, delete
+from src.config import settings
 from src.db.database import get_db
 from src.db.models import User, UserStatus, UserRole
 from src.api.schemas import UserCreate, UserUpdate, Token, UserOut, UserLogin
@@ -9,35 +12,67 @@ from src.services.rabbitmq import publish_event
 from typing import List
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+
+async def validate_invite_code(code: str):
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{settings.TEAM_SERVICE_URL}/api/team/invites/validate",
+                params={"code": code},
+                timeout=5.0
+            )
+            if response.status_code == 200:
+                return response.json()
+            return None
+    except (httpx.ConnectError, httpx.TimeoutException) as e:
+        logger.error(f"Team service connection error: {e}")
+        raise HTTPException(
+            status_code=503,
+            detail="Team service unavailable"
+        )
 
 
 @router.post("/register", response_model=UserOut)
 async def register(payload: UserCreate, db: AsyncSession = Depends(get_db)):
+    # Проверка email
     res = await db.execute(select(User).where(User.email == payload.email))
     if res.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Email already registered")
 
+    # Валидация invite code
+    team_id = None
+    if payload.invite_code:
+        try:
+            team_data = await validate_invite_code(payload.invite_code)
+            if not team_data:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid or expired invite code"
+                )
+            team_id = team_data.get("team_id")
+        except Exception as e:
+            logger.error(f"Error validating invite code: {e}")
+            raise HTTPException(
+                status_code=400,
+                detail="Could not validate invite code"
+            )
+
+    # Создание пользователя
     user = User(
         email=payload.email,
         name=payload.name,
         hashed_password=hash_password(payload.password),
         role=UserRole.USER,
-        status=UserStatus.PENDING if payload.invite_code else UserStatus.ACTIVE,
-        invite_code=payload.invite_code,
-        phone=payload.phone,
-        position=payload.position,
-        department=payload.department
+        status=UserStatus.ACTIVE if team_id else UserStatus.PENDING,
+        team_id=team_id,
+        invite_code=payload.invite_code
     )
+
     db.add(user)
     await db.commit()
     await db.refresh(user)
-
-    await publish_event("user.created", {
-        "user_id": user.id,
-        "email": user.email,
-        "team_id": user.team_id,
-        "invite_code": user.invite_code
-    })
 
     return user
 

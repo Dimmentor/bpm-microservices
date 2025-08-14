@@ -12,7 +12,6 @@ class CalendarEventCreate(BaseModel):
     start_at: datetime
     end_at: datetime
     task_id: Optional[int] = None
-    meeting_id: Optional[int] = None
     team_id: Optional[int] = None
     org_unit_id: Optional[int] = None
     location: Optional[str] = None

@@ -65,7 +65,6 @@ class CommentOut(BaseModel):
 
 
 class EvaluationCreate(BaseModel):
-    task_id: int
     evaluator_id: int
     criteria: Dict[str, int]
     feedback: Optional[str] = None

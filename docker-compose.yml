@@ -1,87 +1,117 @@
 services:
   postgres:
     image: postgres:17-alpine
+    container_name: postgres
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: bpm_db
-    ports:
-      - "5432:5432"
+      POSTGRES_MULTIPLE_DATABASES: user_db,team_db,task_db,calendar_db
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     networks:
       - bpm-network
 
   rabbitmq:
     image: rabbitmq:3-management
-    ports:
-      - "5672:5672"
-      - "15672:15672"
+    container_name: rabbitmq
+    hostname: rabbitmq
     environment:
       RABBITMQ_DEFAULT_USER: admin
       RABBITMQ_DEFAULT_PASS: admin
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 5s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
     networks:
       - bpm-network
 
   user-service:
     build: ./user-service
+    container_name: user-service
     ports:
       - "8001:8000"
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/user_db
       RABBITMQ_URL: amqp://admin:admin@rabbitmq:5672/
+      TEAM_SERVICE_URL: http://team-service:8000  # Важное изменение
     depends_on:
-      - postgres
-      - rabbitmq
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      team-service:
+        condition: service_started  # Добавлено
     networks:
       - bpm-network
+    restart: unless-stopped
 
   team-service:
     build: ./team-service
+    container_name: team-service
     ports:
       - "8002:8000"
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/team_db
       RABBITMQ_URL: amqp://admin:admin@rabbitmq:5672/
     depends_on:
-      - postgres
-      - rabbitmq
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     networks:
       - bpm-network
+    restart: unless-stopped
 
   task-service:
     build: ./task-service
+    container_name: task-service
     ports:
       - "8003:8000"
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/task_db
       RABBITMQ_URL: amqp://admin:admin@rabbitmq:5672/
     depends_on:
-      - postgres
-      - rabbitmq
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     networks:
       - bpm-network
+    restart: unless-stopped
 
   calendar-service:
     build: ./calendar-service
+    container_name: calendar-service
     ports:
       - "8004:8000"
     environment:
-      DB_NAME: calendar_db
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: postgres
-      DB_PASS: postgres
-      RABBIT_URL: amqp://admin:admin@rabbitmq:5672/
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/calendar_db
+      RABBITMQ_URL: amqp://admin:admin@rabbitmq:5672/
     depends_on:
-      - postgres
-      - rabbitmq
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     networks:
       - bpm-network
+    restart: unless-stopped
 
 volumes:
   postgres_data:
+  rabbitmq_data:
 
 networks:
   bpm-network:

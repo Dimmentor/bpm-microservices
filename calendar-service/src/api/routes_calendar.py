@@ -1,13 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, delete, and_, or_, func
+from sqlalchemy import select, update, and_, or_, func
 from src.db.database import get_db
 from src.db.models import CalendarEvent, UserAvailability, TimeSlot, EventType, EventStatus
 from src.api.schemas import (
     CalendarEventCreate, CalendarEventUpdate, CalendarEventOut,
     UserAvailabilityCreate, UserAvailabilityUpdate, UserAvailabilityOut,
-    TimeSlotCreate, TimeSlotOut, AvailabilityCheck, AvailabilityResponse, CalendarView
-)
+    TimeSlotCreate, TimeSlotOut, AvailabilityCheck, AvailabilityResponse)
 from src.services.rabbitmq import publish_event
 from typing import List, Optional
 from datetime import datetime, date, timedelta
@@ -44,7 +43,6 @@ async def create_event(payload: CalendarEventCreate, db: AsyncSession = Depends(
         start_at=payload.start_at,
         end_at=payload.end_at,
         task_id=payload.task_id,
-        meeting_id=payload.meeting_id,
         team_id=payload.team_id,
         org_unit_id=payload.org_unit_id,
         location=payload.location,
@@ -395,3 +393,45 @@ async def create_meeting_event(meeting_id: int, user_id: int, start_at: datetime
     })
 
     return event
+
+
+@router.post("/events/validate")
+async def validate_event_time(
+        payload: dict = Body(...),  # Принимаем JSON тело
+        db: AsyncSession = Depends(get_db)
+):
+    # Валидация полей
+    if not all(k in payload for k in ["participants", "start_at", "end_at"]):
+        raise HTTPException(status_code=422, detail="Missing required fields")
+
+    try:
+        start_at = datetime.fromisoformat(payload["start_at"])
+        end_at = datetime.fromisoformat(payload["end_at"])
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=422, detail="Invalid datetime format")
+
+    conflicts = []
+    for user_id in payload["participants"]:
+        res = await db.execute(
+            select(CalendarEvent).where(
+                and_(
+                    CalendarEvent.user_id == user_id,
+                    CalendarEvent.start_at < end_at,
+                    CalendarEvent.end_at > start_at,
+                    CalendarEvent.status != EventStatus.CANCELLED
+                )
+            )
+        )
+        events = res.scalars().all()
+        if events:
+            conflicts.append({
+                "user_id": user_id,
+                "conflicts": [{
+                    "id": e.id,
+                    "title": e.title,
+                    "start_at": e.start_at.isoformat(),
+                    "end_at": e.end_at.isoformat()
+                } for e in events]
+            })
+
+    return {"is_valid": len(conflicts) == 0, "conflicts": conflicts}
