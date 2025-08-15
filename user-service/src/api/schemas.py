@@ -3,6 +3,7 @@ from typing import Optional
 from datetime import datetime
 from src.db.models import UserStatus, UserRole
 
+
 class UserCreate(BaseModel):
     email: EmailStr
     password: str
@@ -12,6 +13,7 @@ class UserCreate(BaseModel):
     position: Optional[str] = None
     department: Optional[str] = None
 
+
 class UserUpdate(BaseModel):
     name: Optional[str] = None
     phone: Optional[str] = None
@@ -19,6 +21,7 @@ class UserUpdate(BaseModel):
     department: Optional[str] = None
     status: Optional[UserStatus] = None
     role: Optional[UserRole] = None
+
 
 class UserOut(BaseModel):
     id: int
@@ -34,9 +37,11 @@ class UserOut(BaseModel):
     updated_at: Optional[datetime]
     model_config = ConfigDict(from_attributes=True)
 
+
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
+
 
 class UserLogin(BaseModel):
     email: EmailStr

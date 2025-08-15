@@ -2,7 +2,7 @@ import asyncio
 from fastapi import FastAPI
 from src.api.endpoints import router
 from src.db.database import engine
-from src.db.models import Base, User
+from src.db.models import User
 from sqladmin import Admin, ModelView
 
 from src.services.event_consumers import setup_user_consumers

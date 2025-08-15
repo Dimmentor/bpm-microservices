@@ -38,7 +38,7 @@ async def consume_events(queue_name: str, exchange_name: str, routing_keys: list
                 queue_name,
                 durable=True,
                 arguments={
-                    'x-message-ttl': 86400000,  # 24 часа в ms
+                    'x-message-ttl': 86400000,
                     'x-max-length': 10000
                 }
             )
