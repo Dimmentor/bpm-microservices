@@ -367,7 +367,6 @@ async def update_news(news_id: int, payload: TeamNewsUpdate, db: AsyncSession = 
         await db.commit()
         await db.refresh(news)
 
-        # Публикуем событие обновления новости
         await publish_event("team_news.updated", {
             "news_id": news_id,
             "team_id": news.team_id,
@@ -387,7 +386,6 @@ async def delete_news(news_id: int, db: AsyncSession = Depends(get_db)):
     await db.execute(delete(TeamNews).where(TeamNews.id == news_id))
     await db.commit()
 
-    # Публикуем событие удаления новости
     await publish_event("team_news.deleted", {
         "news_id": news_id,
         "team_id": news.team_id
@@ -485,14 +483,11 @@ async def add_team_member(
         role: str = "member",
         db: AsyncSession = Depends(get_db)
 ):
-    """Добавление участника в команду"""
-    # Проверка существования команды
     team_res = await db.execute(select(Team).where(Team.id == team_id))
     team = team_res.scalar_one_or_none()
     if not team:
         raise HTTPException(status_code=404, detail="Team not found")
 
-    # Получение основного подразделения команды
     unit_res = await db.execute(
         select(OrgUnit).where(
             and_(
@@ -504,7 +499,6 @@ async def add_team_member(
     main_unit = unit_res.scalar_one_or_none()
     
     if not main_unit:
-        # Создаем основное подразделение если его нет
         main_unit = OrgUnit(
             team_id=team_id,
             name=f"{team.name} - Main Unit",
@@ -515,7 +509,6 @@ async def add_team_member(
         await db.commit()
         await db.refresh(main_unit)
 
-    # Проверка, что пользователь еще не в команде
     existing_res = await db.execute(
         select(OrgMember).where(
             and_(
@@ -528,7 +521,6 @@ async def add_team_member(
     if existing_res.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="User already in this team")
 
-    # Добавление участника
     member = OrgMember(
         user_id=user_id,
         org_unit_id=main_unit.id,
@@ -560,13 +552,10 @@ async def remove_team_member(
         user_id: int,
         db: AsyncSession = Depends(get_db)
 ):
-    """Удаление участника из команды"""
-    # Проверка существования команды
     team_res = await db.execute(select(Team).where(Team.id == team_id))
     if not team_res.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Team not found")
 
-    # Поиск участника в любом подразделении команды
     member_res = await db.execute(
         select(OrgMember).select_from(
             join(OrgMember, OrgUnit, OrgMember.org_unit_id == OrgUnit.id)
@@ -583,7 +572,6 @@ async def remove_team_member(
     if not member:
         raise HTTPException(status_code=404, detail="User not found in this team")
 
-    # Деактивация участника
     await db.execute(
         update(OrgMember).where(OrgMember.id == member.id).values(
             is_active=False,
@@ -606,13 +594,10 @@ async def get_team_members(
         team_id: int,
         db: AsyncSession = Depends(get_db)
 ):
-    """Получение списка участников команды"""
-    # Проверка существования команды
     team_res = await db.execute(select(Team).where(Team.id == team_id))
     if not team_res.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Team not found")
 
-    # Получение всех участников команды
     members_res = await db.execute(
         select(OrgMember, OrgUnit).select_from(
             join(OrgMember, OrgUnit, OrgMember.org_unit_id == OrgUnit.id)
