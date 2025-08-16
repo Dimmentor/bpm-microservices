@@ -18,7 +18,8 @@ dependencies = [
     "pydantic[email] (>=2.11.7,<3.0.0)",
     "python-jose[cryptography] (>=3.3.0,<4.0.0)",
     "passlib[bcrypt] (>=1.7.4,<2.0.0)",
-    "aio-pika (>=9.4.0,<10.0.0)"
+    "aio-pika (>=9.4.0,<10.0.0)",
+    "httpx (>=0.28.1,<0.29.0)"
 ]
 
 

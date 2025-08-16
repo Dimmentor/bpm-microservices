@@ -5,11 +5,11 @@ import enum
 
 
 class EventType(enum.Enum):
-    TASK = "task"
-    MEETING = "meeting"
-    PERSONAL = "personal"
-    HOLIDAY = "holiday"
-    OTHER = "other"
+    TASK = "TASK"
+    MEETING = "MEETING"
+    PERSONAL = "PERSONAL"
+    HOLIDAY = "HOLIDAY"
+    OTHER = "OTHER"
 
 
 class EventStatus(enum.Enum):

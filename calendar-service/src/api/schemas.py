@@ -18,7 +18,6 @@ class CalendarEventCreate(BaseModel):
     is_all_day: bool = False
     is_recurring: bool = False
     recurring_pattern: Optional[str] = None
-    recurring_end_date: Optional[datetime] = None
     participants: Optional[List[int]] = None
 
 
@@ -43,14 +42,12 @@ class CalendarEventOut(BaseModel):
     start_at: datetime
     end_at: datetime
     task_id: Optional[int]
-    meeting_id: Optional[int]
     team_id: Optional[int]
     org_unit_id: Optional[int]
     location: Optional[str]
     is_all_day: bool
     is_recurring: bool
     recurring_pattern: Optional[str]
-    recurring_end_date: Optional[datetime]
     participants: Optional[str]
     created_at: datetime
     updated_at: Optional[datetime]

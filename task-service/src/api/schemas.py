@@ -48,9 +48,8 @@ class TaskOut(BaseModel):
 
 
 class CommentCreate(BaseModel):
-    task_id: int
     author_id: int
-    text: str
+    content: str
     is_internal: Optional[bool] = False
 
 
@@ -58,7 +57,7 @@ class CommentOut(BaseModel):
     id: int
     task_id: int
     author_id: int
-    text: str
+    content: str
     is_internal: bool
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
@@ -81,55 +80,11 @@ class EvaluationOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class MeetingCreate(BaseModel):
-    title: str
-    description: Optional[str] = None
-    creator_id: int
-    team_id: Optional[int] = None
-    org_unit_id: Optional[int] = None
-    start_at: datetime
-    end_at: datetime
-    location: Optional[str] = None
-    meeting_type: Optional[str] = "general"
-    is_recurring: Optional[bool] = False
-    recurring_pattern: Optional[str] = None
-    participants: List[int]
-
-
-class MeetingUpdate(BaseModel):
-    title: Optional[str] = None
-    description: Optional[str] = None
-    start_at: Optional[datetime] = None
-    end_at: Optional[datetime] = None
-    location: Optional[str] = None
-    meeting_type: Optional[str] = None
-    is_recurring: Optional[bool] = None
-    recurring_pattern: Optional[str] = None
-
-
-class MeetingOut(BaseModel):
-    id: int
-    title: str
-    description: Optional[str]
-    creator_id: int
-    team_id: Optional[int]
-    org_unit_id: Optional[int]
-    start_at: datetime
-    end_at: datetime
-    location: Optional[str]
-    meeting_type: str
-    is_recurring: bool
-    recurring_pattern: Optional[str]
-    created_at: datetime
-    updated_at: Optional[datetime]
-    model_config = ConfigDict(from_attributes=True)
 
 
 class UserPerformanceOut(BaseModel):
     id: int
     user_id: int
-    team_id: Optional[int]
-    org_unit_id: Optional[int]
     period_start: datetime
     period_end: datetime
     total_tasks: int

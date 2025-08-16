@@ -8,6 +8,7 @@ class TaskStatus(enum.Enum):
     CREATED = "created"
     IN_PROGRESS = "in_progress"
     REVIEW = "review"
+
     COMPLETED = "completed"
     CANCELLED = "cancelled"
 
@@ -60,14 +61,6 @@ class TaskEvaluation(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
-class MeetingParticipant(Base):
-    __tablename__ = "meeting_participants"
-    id = Column(Integer, primary_key=True, index=True)
-    meeting_id = Column(Integer, nullable=False)
-    user_id = Column(Integer, nullable=False)
-    status = Column(String, default="pending")
-    role = Column(String, default="participant")
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
 class UserPerformance(Base):

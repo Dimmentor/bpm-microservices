@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, delete, and_
 from src.api.utils import update_user_performance, calculate_average_metrics
+from src.api.task_utils import update_task_status, validate_task_assignment, calculate_task_metrics
+from src.api.evaluation_utils import create_task_evaluation, get_user_evaluation_matrix, get_team_average_scores, get_org_unit_average_scores
 from src.db.database import get_db
 from src.db.models import Task, TaskComment, TaskEvaluation, UserPerformance
 from src.api.schemas import TaskCreate, TaskUpdate, TaskOut, CommentCreate, EvaluationCreate, UserPerformanceOut, \
@@ -105,9 +107,9 @@ async def delete_task(task_id: int, db: AsyncSession = Depends(get_db)):
 @router.post("/tasks/{task_id}/comments")
 async def add_comment(task_id: int, payload: CommentCreate, db: AsyncSession = Depends(get_db)):
     comment = TaskComment(
-        task_id=payload.task_id,
+        task_id=task_id,
         author_id=payload.author_id,
-        text=payload.text,
+        text=payload.content,
         is_internal=payload.is_internal
     )
     db.add(comment)
@@ -133,30 +135,20 @@ async def evaluate_task(
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    scores = list(payload.criteria.values())
-    avg_score = sum(scores) / len(scores) if scores else 0
-
-    eval_obj = TaskEvaluation(
-        task_id=payload.task_id,
-        evaluator_id=payload.evaluator_id,
-        criteria=payload.criteria,
-        score=avg_score,
-        feedback=payload.feedback
-    )
-    db.add(eval_obj)
-    await db.commit()
-    await db.refresh(eval_obj)
-
-    await update_user_performance(task.assignee_id, task.team_id, task.org_unit_id, db)
-
-    await publish_event("task.evaluated", {
-        "task_id": payload.task_id,
-        "score": avg_score,
-        "evaluator_id": payload.evaluator_id,
-        "assignee_id": task.assignee_id
-    })
-
-    return {"id": eval_obj.id, "score": avg_score}
+    try:
+        eval_obj = await create_task_evaluation(
+            task_id=task_id,
+            evaluator_id=payload.evaluator_id,
+            criteria_scores=payload.criteria,
+            feedback=payload.feedback,
+            db=db
+        )
+        
+        await update_user_performance(task.assignee_id, task.team_id, task.org_unit_id, db)
+        
+        return eval_obj
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 # ==================== PERFORMANCE ENDPOINTS ====================
@@ -206,10 +198,32 @@ async def get_team_performance(
         period_end = date(today.year, quarter_start_month + 3,
                           calendar.monthrange(today.year, quarter_start_month + 3)[1])
 
+    # Получение производительности пользователей команды через задачи
+    team_tasks_res = await db.execute(
+        select(Task.assignee_id).where(
+            and_(
+                Task.team_id == team_id,
+                Task.assignee_id.isnot(None)
+            )
+        ).distinct()
+    )
+    team_user_ids = [row[0] for row in team_tasks_res.all()]
+    
+    if not team_user_ids:
+        return {
+            "team_id": team_id,
+            "period_start": period_start,
+            "period_end": period_end,
+            "total_users": 0,
+            "average_score": 0.0,
+            "total_tasks": 0,
+            "completed_tasks": 0
+        }
+    
     team_perf_res = await db.execute(
         select(UserPerformance).where(
             and_(
-                UserPerformance.team_id == team_id,
+                UserPerformance.user_id.in_(team_user_ids),
                 UserPerformance.period_start == period_start,
                 UserPerformance.period_end == period_end
             )
@@ -267,10 +281,32 @@ async def get_org_unit_performance(
         period_end = date(today.year, quarter_start_month + 3,
                           calendar.monthrange(today.year, quarter_start_month + 3)[1])
 
+    # Получение производительности пользователей подразделения через задачи
+    unit_tasks_res = await db.execute(
+        select(Task.assignee_id).where(
+            and_(
+                Task.org_unit_id == org_unit_id,
+                Task.assignee_id.isnot(None)
+            )
+        ).distinct()
+    )
+    unit_user_ids = [row[0] for row in unit_tasks_res.all()]
+    
+    if not unit_user_ids:
+        return {
+            "org_unit_id": org_unit_id,
+            "period_start": period_start,
+            "period_end": period_end,
+            "total_users": 0,
+            "average_score": 0.0,
+            "total_tasks": 0,
+            "completed_tasks": 0
+        }
+    
     unit_perf_res = await db.execute(
         select(UserPerformance).where(
             and_(
-                UserPerformance.org_unit_id == org_unit_id,
+                UserPerformance.user_id.in_(unit_user_ids),
                 UserPerformance.period_start == period_start,
                 UserPerformance.period_end == period_end
             )
@@ -314,12 +350,13 @@ async def get_org_unit_performance(
     }
 
 
-@router.get("/performance/{user_id}/matrix")
-async def get_performance_matrix(
+@router.get("/evaluation/matrix/{user_id}")
+async def get_evaluation_matrix(
         user_id: int,
         period: str = "quarter",
         db: AsyncSession = Depends(get_db)
 ):
+    """Получение матрицы оценок пользователя согласно ТЗ"""
     today = date.today()
     if period == "quarter":
         quarter = (today.month - 1) // 3 + 1
@@ -334,40 +371,45 @@ async def get_performance_matrix(
         period_end = date(today.year, today.month,
                           calendar.monthrange(today.year, today.month)[1])
 
-    perf = await db.execute(
-        select(UserPerformance).where(
-            and_(
-                UserPerformance.user_id == user_id,
-                UserPerformance.period_start == period_start,
-                UserPerformance.period_end == period_end
+    # Получение матрицы оценок пользователя
+    user_matrix = await get_user_evaluation_matrix(
+        user_id=user_id,
+        period_start=period_start.isoformat(),
+        period_end=period_end.isoformat(),
+        db=db
+    )
+    
+    # Получение средних оценок по команде для сравнения
+    user_task_res = await db.execute(
+        select(Task.team_id, Task.org_unit_id).select_from(Task).where(Task.assignee_id == user_id).limit(1)
+    )
+    user_task = user_task_res.first()
+    
+    team_avg = None
+    org_unit_avg = None
+    
+    if user_task:
+        if user_task.team_id:
+            team_avg = await get_team_average_scores(
+                team_id=user_task.team_id,
+                period_start=period_start.isoformat(),
+                period_end=period_end.isoformat(),
+                db=db
             )
-        )
-    )
-    user_perf = perf.scalar_one_or_none()
-
-    if not user_perf:
-        raise HTTPException(status_code=404, detail="Performance data not found")
-
-    team_avg = await calculate_average_metrics(
-        user_perf.metrics.get("team_id"),
-        period_start,
-        period_end,
-        db
-    )
-
-    unit_avg = await calculate_average_metrics(
-        user_perf.metrics.get("org_unit_id"),
-        period_start,
-        period_end,
-        db,
-        by_unit=True
-    )
+        
+        if user_task.org_unit_id:
+            org_unit_avg = await get_org_unit_average_scores(
+                org_unit_id=user_task.org_unit_id,
+                period_start=period_start.isoformat(),
+                period_end=period_end.isoformat(),
+                db=db
+            )
 
     return {
-        "user_metrics": user_perf.metrics,
+        "user_evaluation_matrix": user_matrix,
         "comparison": {
-            "team_avg": team_avg,
-            "org_unit_avg": unit_avg
+            "team_average": team_avg,
+            "org_unit_average": org_unit_avg
         },
         "period": {
             "start": period_start,

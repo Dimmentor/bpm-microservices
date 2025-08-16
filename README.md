@@ -1,451 +1,387 @@
-# Микросервисные FastAPI-приложения для управления и контроля бизнеса(Business process management)
+<h2>Микросервисное приложение на FastAPI. Система управления и контроля бизнеса.</h2>
 
-Проект теперь состоит из четырех микросервисов:
+Основной стек: FastAPI(Python), PostgreSQL, RabbitMQ.
 
 - **User Service** (порт 8001) - управление пользователями, статусами доступа, привязка к командам
 - **Team Service** (порт 8002) - управление командами, организационной структурой, новостями
 - **Task Service** (порт 8003) - управление задачами, комментариями, оценками, встречами, производительностью
 - **Calendar Service** (порт 8004) - управление календарем, проверка доступности времени
 
-### User Service
-
-- ✅ Статусы доступа пользователей (active, inactive, suspended, pending)
-- ✅ Роли пользователей (user, admin, team_admin, manager)
-- ✅ Обновление и удаление пользователей
-- ✅ Привязка к командам при регистрации
-- ✅ Управление статусами пользователей
-
-### Team Service
-
-- ✅ Полная организационная структура с иерархией
-- ✅ Управление участниками подразделений
-- ✅ Система новостей команд
-- ✅ CRUD операции для всех сущностей
-
-### Task Service
-
-- ✅ Статусы выполнения задач (created, in_progress, review, completed, cancelled)
-- ✅ Приоритеты задач (low, medium, high, urgent)
-- ✅ Отслеживание времени выполнения
-- ✅ Система оценки производительности
-- ✅ Расширенная система встреч
-
-### Calendar Service
-
-- ✅ Управление событиями календаря
-- ✅ Проверка доступности времени
-- ✅ Настройки рабочего времени пользователей
-- ✅ Интеграция с задачами и встречами
-
-## Гайд по запуску и тестированию микросервисов:
-
-1. Подготовка:
-
-* Клонировать репозиторий
-
-```sh
-cd bpm-microservices
+### Запуск сервисов
+```bash
+docker-compose up -build
 ```
+* При этом миграции применятся автоматически, сперва сервисы дождутся запуска RabbitMQ и PostgreSQL.
 
-* Сборка и запуск всех микросервисов(миграция применится автоматически)
+# Подробный гайд по тестированию эндпоинтов, сгенерировал запросы на ИИ:
 
-```sh
-docker-compose up -d --build
-```
+## 👤 User Service (8001)
 
-* Проверка доступности:
+### 1. Регистрация без invite кода
 
-- User Service: http://localhost:8001/docs
-- Team Service: http://localhost:8002/docs
-- Task Service: http://localhost:8003/docs
-- Calendar Service: http://localhost:8004/docs
-- RabbitMQ Management: http://localhost:15672 (admin/admin)
-
-2. Тестирование функционала:
-
-### 1. User Service
-
-#### 1.1 Регистрация пользователя
-
+**Запрос:**
 ```bash
 curl -X POST "http://localhost:8001/api/users/register" \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "john.doe@example.com",
-    "password": "securepassword123",
+    "email": "john@example.com",
+    "password": "SecurePass123!",
     "name": "John Doe",
     "phone": "+1234567890",
-    "position": "Senior Developer",
+    "position": "Developer",
     "department": "Engineering"
   }'
 ```
 
-#### 1.2 Регистрация с кодом приглашения
+### 2. Авторизация
 
+**Запрос:**
 ```bash
-curl -X POST "http://localhost:8001/api/users/register" \
+curl -X POST "http://localhost:8001/api/users/login" \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "jane.smith@example.com",
-    "password": "securepassword456",
-    "name": "Jane Smith",
-    "invite_code": "AbC123Xy",
-    "phone": "+1234567891",
-    "position": "Product Manager",
-    "department": "Product"
+    "email": "john@example.com",
+    "password": "SecurePass123!"
   }'
 ```
 
-#### 1.3 Обновление пользователя
+### 3. Получение профиля
 
+**Запрос:**
 ```bash
-curl -X PUT "http://localhost:8001/api/users/1" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "John Updated Doe",
-    "phone": "+1234567899",
-    "position": "Lead Developer"
-  }'
+curl -X GET "http://localhost:8001/api/users/me" \
+  -H "Authorization: Bearer <token>"
 ```
 
-#### 1.4 Изменение статуса пользователя
+### 4. Обновление статуса пользователя
 
+**Запрос:**
 ```bash
 curl -X PUT "http://localhost:8001/api/users/1/status" \
   -H "Content-Type: application/json" \
-  -d '"suspended"'
+  -H "Authorization: Bearer <admin_token>" \
+  -d '"active"'
 ```
 
-#### 1.5 Назначение в команду
+---
 
-```bash
-curl -X PUT "http://localhost:8001/api/users/1/team" \
-  -H "Content-Type: application/json" \
-  -d '1'
-```
+## 🏢 Team Service (8002)
 
-### 2. Team Service
+### 1. Создание команды (автоматически создает invite код)
 
-#### 2.1 Создание команды с описанием
-
+**Запрос:**
 ```bash
 curl -X POST "http://localhost:8002/api/teams" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <admin_token>" \
   -d '{
-    "name": "Команда разработки",
-    "description": "Основная команда разработки продукта",
+    "name": "Backend Development Team",
+    "description": "Team responsible for backend services",
     "owner_id": 1
   }'
 ```
 
-#### 2.2 Создание иерархической структуры
+**Ожидаемый ответ:**
+```json
+{
+  "id": 1,
+  "name": "Backend Development Team",
+  "description": "Team responsible for backend services",
+  "owner_id": 1,
+  "invite_code": "ABC123XY",
+  "is_active": true,
+  "created_at": "2024-01-15T10:15:00Z"
+}
+```
 
+### 2. Регистрация с invite кодом
+
+**Запрос:**
 ```bash
-# Создание главного подразделения
-curl -X POST "http://localhost:8002/api/org_units" \
+curl -X POST "http://localhost:8001/api/users/register" \
   -H "Content-Type: application/json" \
   -d '{
-    "team_id": 1,
-    "name": "Отдел разработки",
-    "description": "Главный отдел разработки"
-  }'
-
-# Создание подразделения-потомка
-curl -X POST "http://localhost:8002/api/org_units" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "team_id": 1,
-    "name": "Frontend команда",
-    "description": "Команда фронтенд разработки",
-    "parent_id": 1
+    "email": "jane@example.com", 
+    "password": "SecurePass123!",
+    "name": "Jane Smith",
+    "phone": "+1234567891",
+    "position": "Team Manager",
+    "department": "Engineering",
+    "invite_code": "ABC123XY"
   }'
 ```
 
-#### 2.3 Добавление участников с ролями
+### 3. Создание организационного подразделения
 
+**Запрос:**
 ```bash
-curl -X POST "http://localhost:8002/api/org_members" \
+curl -X POST "http://localhost:8002/api/org_units" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <admin_token>" \
   -d '{
-    "user_id": 1,
-    "org_unit_id": 2,
-    "position": "Senior Frontend Developer",
-    "manager_id": null
+    "team_id": 1,
+    "name": "IT Department",
+    "description": "Information Technology Department",
+    "parent_id": null
   }'
 ```
 
-#### 2.4 Создание новости команды
+### 4. Добавление участника в команду
 
+**Запрос:**
+```bash
+curl -X POST "http://localhost:8002/api/teams/1/members?user_id=2&role=developer" \
+  -H "Authorization: Bearer <manager_token>"
+```
+
+**Ожидаемый ответ:**
+```json
+{
+  "message": "Member added successfully",
+  "member_id": 1,
+  "team_id": 1,
+  "user_id": 2,
+  "role": "developer"
+}
+```
+
+### 5. Получение участников команды
+
+**Запрос:**
+```bash
+curl -X GET "http://localhost:8002/api/teams/1/members" \
+  -H "Authorization: Bearer <token>"
+```
+
+### 6. Удаление участника из команды
+
+**Запрос:**
+```bash
+curl -X DELETE "http://localhost:8002/api/teams/1/members/2" \
+  -H "Authorization: Bearer <manager_token>"
+```
+
+### 7. Создание новости команды
+
+**Запрос:**
 ```bash
 curl -X POST "http://localhost:8002/api/news" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <manager_token>" \
   -d '{
     "team_id": 1,
     "author_id": 1,
-    "title": "Новый релиз v2.0",
-    "content": "Мы успешно выпустили новую версию продукта с множеством улучшений!"
+    "title": "Sprint Planning Meeting",
+    "content": "Sprint planning meeting scheduled for tomorrow at 10 AM",
+    "is_published": true
   }'
 ```
 
-### 3. Task Service
+---
 
-#### 3.1 Создание задачи с приоритетом
+## 📋 Task Service (8003)
 
+### 1. Создание задачи
+
+**Запрос:**
 ```bash
 curl -X POST "http://localhost:8003/api/tasks" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <manager_token>" \
   -d '{
-    "title": "Критический баг в авторизации",
-    "description": "Необходимо исправить баг с авторизацией пользователей",
+    "title": "Implement user authentication",
+    "description": "Add JWT-based authentication to the API",
     "creator_id": 1,
-    "assignee_id": 1,
+    "assignee_id": 2,
     "team_id": 1,
-    "org_unit_id": 2,
-    "priority": 1,
-    "due_at": "2024-01-20T18:00:00Z",
-    "estimated_hours": 4.0
+    "org_unit_id": 1,
+    "priority": 2,
+    "due_at": "2025-08-15T06:52:47.721Z",
+    "estimated_hours": 10
   }'
 ```
 
-#### 3.2 Обновление статуса задачи
+### 2. Обновление статуса задачи
 
+**Запрос:**
 ```bash
 curl -X PUT "http://localhost:8003/api/tasks/1" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <assignee_token>" \
   -d '{
     "status": "in_progress",
-    "started_at": "2024-01-15T09:00:00Z"
+    "actual_hours": 4
   }'
 ```
 
-#### 3.3 Завершение задачи
+### 3. Добавление комментария
 
+**Запрос:**
+```bash
+curl -X POST "http://localhost:8003/api/tasks/1/comments" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
+  -d '{
+    "author_id": 2,
+    "content": "Started working on JWT implementation. Setting up dependencies."
+  }'
+```
+
+### 4. Завершение задачи
+
+**Запрос:**
 ```bash
 curl -X PUT "http://localhost:8003/api/tasks/1" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <assignee_token>" \
   -d '{
     "status": "completed",
-    "completed_at": "2024-01-15T17:00:00Z",
-    "actual_hours": 6.5
+    "actual_hours": 14
   }'
 ```
 
-#### 3.4 Оценка задачи с обратной связью
+### 5. Оценка выполненной задачи
 
+**Запрос:**
 ```bash
 curl -X POST "http://localhost:8003/api/tasks/1/evaluate" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <manager_token>" \
   -d '{
-      "качество_кода": 4,
-      "соблюдение_сроков": 3,
-      "документация": 5,
-      "тестирование": 4
+    "evaluator_id": 1,
+    "criteria": {
+      "соблюдение_сроков": 4,
+      "полнота_выполнения": 5,
+      "качество_работы": 4
     },
-    "feedback": "Отличная работа! Код качественный, но немного задержались со сроками."
+    "feedback": "Отличная работа! Задача выполнена качественно и в срок."
   }'
 ```
 
-### 4. Calendar Service
+### 6. Получение матрицы оценок
 
-#### 4.1 Настройка доступности пользователя
+**Запрос:**
+```bash
+curl -X GET "http://localhost:8003/api/evaluation/matrix/2?period=quarter" \
+  -H "Authorization: Bearer <token>"
+```
 
+**Ожидаемый ответ:**
+```json
+{
+  "user_evaluation_matrix": {
+    "user_id": 2,
+    "period": {
+      "start": "2024-10-01T00:00:00",
+      "end": "2024-12-31T23:59:59"
+    },
+    "evaluations_count": 1,
+    "average_scores": {
+      "соблюдение_сроков": 4.0,
+      "полнота_выполнения": 5.0,
+      "качество_работы": 4.0
+    },
+    "overall_average": 4.33
+  },
+  "comparison": {
+    "team_average": {
+      "team_id": 1,
+      "average_scores": {
+        "соблюдение_сроков": 4.0,
+        "полнота_выполнения": 5.0,
+        "качество_работы": 4.0
+      },
+      "overall_average": 4.33
+    },
+    "org_unit_average": {
+      "org_unit_id": 1,
+      "average_scores": {
+        "соблюдение_сроков": 4.0,
+        "полнота_выполнения": 5.0,
+        "качество_работы": 4.0
+      },
+      "overall_average": 4.33
+    }
+  }
+}
+```
+
+---
+
+## 📅 Calendar Service (8004)
+
+### 1. Настройка доступности пользователя
+
+**Запрос:**
 ```bash
 curl -X POST "http://localhost:8004/api/availability" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
   -d '{
     "user_id": 1,
+    "is_available": true,
     "work_start_time": "09:00",
     "work_end_time": "18:00",
-    "work_days": 31,
-    "lunch_start": "13:00",
-    "lunch_end": "14:00",
     "timezone": "UTC+3"
   }'
 ```
 
-#### 4.2 Создание события в календаре
+### 2. Создание простого события
 
+**Запрос:**
 ```bash
 curl -X POST "http://localhost:8004/api/events" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
   -d '{
     "user_id": 1,
-    "title": "Встреча с клиентом",
-    "description": "Обсуждение требований к новому функционалу",
-    "event_type": "meeting",
-    "start_at": "2024-01-16T10:00:00Z",
-    "end_at": "2024-01-16T11:00:00Z",
-    "location": "Конференц-зал A",
+    "title": "Code Review Session",
+    "description": "Review pull requests",
+    "event_type": "TASK",
+    "start_at": "2024-01-16T14:00:00Z",
+    "end_at": "2024-01-16T15:00:00Z",
+    "task_id": 1
+  }'
+```
+
+### 3. Создание встречи с участниками
+
+**Запрос:**
+```bash
+curl -X POST "http://localhost:8004/api/events" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <manager_token>" \
+  -d '{
+    "user_id": 2,
+    "title": "Sprint Planning",
+    "description": "Planning meeting for next sprint",
+    "event_type": "MEETING",
+    "start_at": "2024-01-17T10:00:00Z",
+    "end_at": "2024-01-17T12:00:00Z",
+    "location": "Conference Room A",
+    "team_id": 1,
     "participants": [1, 2]
   }'
 ```
 
-#### 4.3 Проверка доступности времени
+### 4. Проверка доступности участников
 
+**Запрос:**
 ```bash
 curl -X POST "http://localhost:8004/api/availability/check" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
   -d '{
     "user_id": 1,
-    "start_at": "2024-01-16T14:00:00Z",
-    "end_at": "2024-01-16T15:00:00Z"
+    "start_at": "2025-08-15T08:09:23.885Z",
+    "end_at": "2025-08-15T09:09:23.885Z"
   }'
 ```
 
-#### 4.4 Получение календаря на период
+### 5. Получение календаря пользователя
 
+**Запрос:**
 ```bash
-curl -X GET "http://localhost:8004/api/calendar?user_id=1&start_date=2024-01-15&end_date=2024-01-21&include_team_events=true&team_id=1"
+curl -X GET "http://localhost:8004/api/events?user_id=1&start_date=2024-01-15&end_date=2024-01-20" \
+  -H "Authorization: Bearer <token>"
 ```
-
-## 🔄 Интеграция через RabbitMQ
-
-### Проверка событий в RabbitMQ
-
-1. Откройте RabbitMQ Management: http://localhost:15672
-2. Войдите с admin/admin
-3. Перейдите в раздел "Exchanges"
-4. Проверьте, что события публикуются при операциях
-
-### Примеры событий:
-
-- `user.created` - создание пользователя
-- `user.status_changed` - изменение статуса
-- `team.created` - создание команды
-- `org_unit.created` - создание подразделения
-- `task.created` - создание задачи
-- `task.status_changed` - изменение статуса задачи
-- `meeting.scheduled` - планирование встречи
-
-## 📊 Тестирование производительности
-
-### Получение статистики пользователя
-
-```bash
-curl -X GET "http://localhost:8003/api/performance/user/1?period_start=2024-01-01&period_end=2024-03-31"
-```
-
-### Получение статистики команды
-
-```bash
-curl -X GET "http://localhost:8003/api/performance/team/1?period_start=2024-01-01&period_end=2024-03-31"
-```
-
-## 🛠️ Полезные команды для отладки
-
-### Просмотр логов всех сервисов
-
-```bash
-docker-compose logs -f user-service
-docker-compose logs -f team-service
-docker-compose logs -f task-service
-docker-compose logs -f calendar-service
-```
-
-### Проверка базы данных
-
-```bash
-# Подключение к базам данных
-docker-compose exec postgres psql -U postgres -d user_db
-docker-compose exec postgres psql -U postgres -d team_db
-docker-compose exec postgres psql -U postgres -d task_db
-docker-compose exec postgres psql -U postgres -d calendar_db
-```
-
-### Полезные SQL запросы
-
-```sql
--- Пользователи с их статусами
-SELECT id, email, name, role, status, team_id
-FROM users;
-
--- Организационная структура
-SELECT ou.name, ou.level, om.position, om.user_id
-FROM org_units ou
-         LEFT JOIN org_members om ON ou.id = om.org_unit_id
-WHERE ou.is_active = true;
-
--- Задачи по статусам
-SELECT status, COUNT(*) as count
-FROM tasks
-GROUP BY status;
-
--- События календаря
-SELECT title, start_at, end_at, event_type
-FROM calendar_events;
-```
-
-## ✅ Чек-лист полного тестирования
-
-### User Service
-
-- [ ] Регистрация пользователей
-- [ ] Логин с проверкой статуса
-- [ ] Обновление информации пользователя
-- [ ] Изменение статуса пользователя
-- [ ] Назначение в команду
-- [ ] Удаление пользователя
-
-### Team Service
-
-- [ ] Создание команд
-- [ ] Создание иерархической структуры
-- [ ] Добавление участников
-- [ ] Управление участниками
-- [ ] Создание новостей
-- [ ] CRUD операции
-
-### Task Service
-
-- [ ] Создание задач с приоритетами
-- [ ] Изменение статусов задач
-- [ ] Добавление комментариев
-- [ ] Оценка задач
-- [ ] Создание встреч
-- [ ] Статистика производительности
-
-### Calendar Service
-
-- [ ] Настройка доступности
-- [ ] Создание событий
-- [ ] Проверка доступности
-- [ ] Просмотр календаря
-- [ ] Интеграция с задачами/встречами
-
-### Интеграция
-
-- [ ] События RabbitMQ
-- [ ] Синхронизация данных
-- [ ] Валидация между сервисами
-
-## 🐛 Устранение неполадок
-
-### Проблемы с миграциями
-
-```bash
-# Пересоздание баз данных
-docker-compose down -v
-docker-compose up -d postgres
-# Подождите запуска PostgreSQL
-docker-compose up -d
-```
-
-### Проблемы с RabbitMQ
-
-```bash
-# Проверка подключения
-docker-compose exec user-service python -c "
-import asyncio
-from src.services.rabbitmq import publish_event
-asyncio.run(publish_event('test', {'message': 'test'}))
-"
-```
-
-### Проблемы с портами
-
-```bash
-# Проверка занятых портов
-netstat -tulpn | grep :800
-# Остановка процессов на портах
-sudo lsof -ti:8001 | xargs kill -9
-``` 

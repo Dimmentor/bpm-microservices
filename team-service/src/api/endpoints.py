@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, delete, func, and_
+from sqlalchemy import select, update, delete, func, and_, join
 from src.api.utils import get_managers_chain, get_subordinates, build_unit_tree
 from src.db.database import get_db
 from src.db.models import Team, OrgUnit, OrgMember, TeamNews
@@ -476,3 +476,170 @@ async def validate_invite(
         raise HTTPException(status_code=404, detail="Invalid invite code")
 
     return {"team_id": team.id, "team_name": team.name}
+
+
+@router.post("/teams/{team_id}/members")
+async def add_team_member(
+        team_id: int,
+        user_id: int,
+        role: str = "member",
+        db: AsyncSession = Depends(get_db)
+):
+    """Добавление участника в команду"""
+    # Проверка существования команды
+    team_res = await db.execute(select(Team).where(Team.id == team_id))
+    team = team_res.scalar_one_or_none()
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found")
+
+    # Получение основного подразделения команды
+    unit_res = await db.execute(
+        select(OrgUnit).where(
+            and_(
+                OrgUnit.team_id == team_id,
+                OrgUnit.is_active == True
+            )
+        ).limit(1)
+    )
+    main_unit = unit_res.scalar_one_or_none()
+    
+    if not main_unit:
+        # Создаем основное подразделение если его нет
+        main_unit = OrgUnit(
+            team_id=team_id,
+            name=f"{team.name} - Main Unit",
+            description="Main organizational unit",
+            level=1
+        )
+        db.add(main_unit)
+        await db.commit()
+        await db.refresh(main_unit)
+
+    # Проверка, что пользователь еще не в команде
+    existing_res = await db.execute(
+        select(OrgMember).where(
+            and_(
+                OrgMember.user_id == user_id,
+                OrgMember.org_unit_id == main_unit.id,
+                OrgMember.is_active == True
+            )
+        )
+    )
+    if existing_res.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="User already in this team")
+
+    # Добавление участника
+    member = OrgMember(
+        user_id=user_id,
+        org_unit_id=main_unit.id,
+        position=role
+    )
+    db.add(member)
+    await db.commit()
+    await db.refresh(member)
+
+    await publish_event("team_member.added", {
+        "team_id": team_id,
+        "user_id": user_id,
+        "role": role,
+        "member_id": member.id
+    })
+
+    return {
+        "message": "Member added successfully",
+        "member_id": member.id,
+        "team_id": team_id,
+        "user_id": user_id,
+        "role": role
+    }
+
+
+@router.delete("/teams/{team_id}/members/{user_id}")
+async def remove_team_member(
+        team_id: int,
+        user_id: int,
+        db: AsyncSession = Depends(get_db)
+):
+    """Удаление участника из команды"""
+    # Проверка существования команды
+    team_res = await db.execute(select(Team).where(Team.id == team_id))
+    if not team_res.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Team not found")
+
+    # Поиск участника в любом подразделении команды
+    member_res = await db.execute(
+        select(OrgMember).select_from(
+            join(OrgMember, OrgUnit, OrgMember.org_unit_id == OrgUnit.id)
+        ).where(
+            and_(
+                OrgMember.user_id == user_id,
+                OrgUnit.team_id == team_id,
+                OrgMember.is_active == True
+            )
+        )
+    )
+    member = member_res.scalar_one_or_none()
+    
+    if not member:
+        raise HTTPException(status_code=404, detail="User not found in this team")
+
+    # Деактивация участника
+    await db.execute(
+        update(OrgMember).where(OrgMember.id == member.id).values(
+            is_active=False,
+            end_date=func.now()
+        )
+    )
+    await db.commit()
+
+    await publish_event("team_member.removed", {
+        "team_id": team_id,
+        "user_id": user_id,
+        "member_id": member.id
+    })
+
+    return {"message": "Member removed successfully"}
+
+
+@router.get("/teams/{team_id}/members")
+async def get_team_members(
+        team_id: int,
+        db: AsyncSession = Depends(get_db)
+):
+    """Получение списка участников команды"""
+    # Проверка существования команды
+    team_res = await db.execute(select(Team).where(Team.id == team_id))
+    if not team_res.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Team not found")
+
+    # Получение всех участников команды
+    members_res = await db.execute(
+        select(OrgMember, OrgUnit).select_from(
+            join(OrgMember, OrgUnit, OrgMember.org_unit_id == OrgUnit.id)
+        ).where(
+            and_(
+                OrgUnit.team_id == team_id,
+                OrgMember.is_active == True
+            )
+        )
+    )
+    members_data = members_res.all()
+
+    members = []
+    for member, unit in members_data:
+        members.append({
+            "member_id": member.id,
+            "user_id": member.user_id,
+            "position": member.position,
+            "org_unit_id": member.org_unit_id,
+            "org_unit_name": unit.name,
+            "manager_id": member.manager_id,
+            "start_date": member.start_date,
+            "is_active": member.is_active
+        })
+
+    return {
+        "team_id": team_id,
+        "members": members,
+        "total_count": len(members)
+    }
