@@ -24,7 +24,6 @@ async def publish_event(routing_key: str, body: dict):
 
 
 async def consume_events(queue_name: str, exchange_name: str, routing_keys: list, callback):
-    """Базовый consumer для всех сервисов"""
     try:
         connection = await aio_pika.connect_robust(RABBITMQ_URL)
         async with connection:

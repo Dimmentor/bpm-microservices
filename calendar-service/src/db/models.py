@@ -28,25 +28,21 @@ class CalendarEvent(Base):
     event_type = Column(Enum(EventType), nullable=False)
     status = Column(Enum(EventStatus), default=EventStatus.SCHEDULED)
 
-    # Временные параметры
     start_at = Column(DateTime(timezone=True), nullable=False)
     end_at = Column(DateTime(timezone=True), nullable=False)
     is_all_day = Column(Boolean, default=False)
     is_recurring = Column(Boolean, default=False)
     recurring_pattern = Column(String, nullable=True)
 
-    # Связи с другими сущностями
     user_id = Column(Integer, nullable=False)  # Владелец события
     task_id = Column(Integer, nullable=True)  # Для событий-задач
     team_id = Column(Integer, nullable=True)  # Команда
     org_unit_id = Column(Integer, nullable=True)  # Подразделение
 
-    # Поля для встреч (ранее были в Meeting)
     location = Column(String, nullable=True)
     meeting_type = Column(String, nullable=True, default="general")
     participants = Column(JSON, nullable=True)  # Список ID участников
 
-    # Системные поля
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -57,21 +53,17 @@ class UserAvailability(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, nullable=False)
 
-    # Рабочие часы
-    work_start_time = Column(String, default="09:00")  # HH:MM
-    work_end_time = Column(String, default="18:00")  # HH:MM
+    work_start_time = Column(String, default="09:00")
+    work_end_time = Column(String, default="18:00")
 
-    # Рабочие дни (битовая маска: 1=понедельник, 2=вторник, ..., 64=воскресенье)
-    work_days = Column(Integer, default=31)  # 31 = пн-пт (1+2+4+8+16)
+    work_days = Column(Integer, default=31)
 
     # Перерывы
     lunch_start = Column(String, default="13:00")
     lunch_end = Column(String, default="14:00")
 
-    # Временная зона
     timezone = Column(String, default="UTC")
 
-    # Настройки доступности
     is_available = Column(Boolean, default=True)
     auto_decline_conflicts = Column(Boolean, default=False)
 
@@ -84,10 +76,10 @@ class TimeSlot(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, nullable=False)
-    date = Column(DateTime(timezone=True), nullable=False)  # Дата (без времени)
-    start_time = Column(String, nullable=False)  # HH:MM
-    end_time = Column(String, nullable=False)  # HH:MM
+    date = Column(DateTime(timezone=True), nullable=False)
+    start_time = Column(String, nullable=False)
+    end_time = Column(String, nullable=False)
     is_available = Column(Boolean, default=True)
-    event_id = Column(Integer, nullable=True)  # Если занято событием
+    event_id = Column(Integer, nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())

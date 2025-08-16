@@ -3,7 +3,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, delete, and_
 from src.api.utils import update_user_performance, calculate_average_metrics
 from src.api.task_utils import update_task_status, validate_task_assignment, calculate_task_metrics
-from src.api.evaluation_utils import create_task_evaluation, get_user_evaluation_matrix, get_team_average_scores, get_org_unit_average_scores
+from src.api.evaluation_utils import create_task_evaluation, get_user_evaluation_matrix, get_team_average_scores, \
+    get_org_unit_average_scores
 from src.db.database import get_db
 from src.db.models import Task, TaskComment, TaskEvaluation, UserPerformance
 from src.api.schemas import TaskCreate, TaskUpdate, TaskOut, CommentCreate, EvaluationCreate, UserPerformanceOut, \
@@ -143,15 +144,13 @@ async def evaluate_task(
             feedback=payload.feedback,
             db=db
         )
-        
+
         await update_user_performance(task.assignee_id, task.team_id, task.org_unit_id, db)
-        
+
         return eval_obj
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-
-# ==================== PERFORMANCE ENDPOINTS ====================
 
 @router.get("/performance/user/{user_id}", response_model=UserPerformanceOut)
 async def get_user_performance(
@@ -198,7 +197,6 @@ async def get_team_performance(
         period_end = date(today.year, quarter_start_month + 3,
                           calendar.monthrange(today.year, quarter_start_month + 3)[1])
 
-    # Получение производительности пользователей команды через задачи
     team_tasks_res = await db.execute(
         select(Task.assignee_id).where(
             and_(
@@ -208,7 +206,7 @@ async def get_team_performance(
         ).distinct()
     )
     team_user_ids = [row[0] for row in team_tasks_res.all()]
-    
+
     if not team_user_ids:
         return {
             "team_id": team_id,
@@ -219,7 +217,7 @@ async def get_team_performance(
             "total_tasks": 0,
             "completed_tasks": 0
         }
-    
+
     team_perf_res = await db.execute(
         select(UserPerformance).where(
             and_(
@@ -281,7 +279,6 @@ async def get_org_unit_performance(
         period_end = date(today.year, quarter_start_month + 3,
                           calendar.monthrange(today.year, quarter_start_month + 3)[1])
 
-    # Получение производительности пользователей подразделения через задачи
     unit_tasks_res = await db.execute(
         select(Task.assignee_id).where(
             and_(
@@ -291,7 +288,7 @@ async def get_org_unit_performance(
         ).distinct()
     )
     unit_user_ids = [row[0] for row in unit_tasks_res.all()]
-    
+
     if not unit_user_ids:
         return {
             "org_unit_id": org_unit_id,
@@ -302,7 +299,7 @@ async def get_org_unit_performance(
             "total_tasks": 0,
             "completed_tasks": 0
         }
-    
+
     unit_perf_res = await db.execute(
         select(UserPerformance).where(
             and_(
@@ -371,23 +368,21 @@ async def get_evaluation_matrix(
         period_end = date(today.year, today.month,
                           calendar.monthrange(today.year, today.month)[1])
 
-    # Получение матрицы оценок пользователя
     user_matrix = await get_user_evaluation_matrix(
         user_id=user_id,
         period_start=period_start.isoformat(),
         period_end=period_end.isoformat(),
         db=db
     )
-    
-    # Получение средних оценок по команде для сравнения
+
     user_task_res = await db.execute(
         select(Task.team_id, Task.org_unit_id).select_from(Task).where(Task.assignee_id == user_id).limit(1)
     )
     user_task = user_task_res.first()
-    
+
     team_avg = None
     org_unit_avg = None
-    
+
     if user_task:
         if user_task.team_id:
             team_avg = await get_team_average_scores(
@@ -396,7 +391,7 @@ async def get_evaluation_matrix(
                 period_end=period_end.isoformat(),
                 db=db
             )
-        
+
         if user_task.org_unit_id:
             org_unit_avg = await get_org_unit_average_scores(
                 org_unit_id=user_task.org_unit_id,

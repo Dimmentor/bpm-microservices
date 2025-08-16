@@ -23,23 +23,20 @@ async def create_event(payload: CalendarEventCreate, db: AsyncSession = Depends(
     if payload.start_at >= payload.end_at:
         raise HTTPException(status_code=400, detail="start_at must be before end_at")
 
-    # Если это встреча с участниками, используем валидацию
     if payload.event_type == EventType.MEETING and payload.participants:
-        # Проверка прав на создание встречи
         has_permission = await check_user_permissions(
             organizer_id=payload.user_id,
             participants=payload.participants,
             team_id=payload.team_id,
             org_unit_id=payload.org_unit_id
         )
-        
+
         if not has_permission:
             raise HTTPException(
-                status_code=403, 
+                status_code=403,
                 detail="Недостаточно прав для создания встречи с указанными участниками"
             )
-        
-        # Создание встречи с валидацией участников
+
         result = await create_meeting_with_validation(
             title=payload.title,
             description=payload.description,
@@ -52,7 +49,7 @@ async def create_event(payload: CalendarEventCreate, db: AsyncSession = Depends(
             org_unit_id=payload.org_unit_id,
             db=db
         )
-        
+
         if not result["success"]:
             raise HTTPException(
                 status_code=409,
@@ -61,8 +58,7 @@ async def create_event(payload: CalendarEventCreate, db: AsyncSession = Depends(
                     "validation": result["validation"]
                 }
             )
-        
-        # Уведомление участников
+
         await notify_participants(
             event_id=result["event"].id,
             participants=payload.participants,
@@ -74,10 +70,9 @@ async def create_event(payload: CalendarEventCreate, db: AsyncSession = Depends(
                 "location": payload.location
             }
         )
-        
+
         return result["event"]
-    
-    # Обычное создание события (не встреча или без участников)
+
     conflicts = await db.execute(
         select(CalendarEvent).where(
             and_(

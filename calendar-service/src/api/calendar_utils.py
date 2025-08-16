@@ -1,6 +1,3 @@
-"""
-Утилиты для валидации календаря и проверки доступности
-"""
 import httpx
 from datetime import datetime
 from typing import List, Dict, Optional
@@ -12,26 +9,23 @@ from src.services.rabbitmq import publish_event
 
 
 async def validate_participants_availability(
-    participants: List[int],
-    start_at: datetime,
-    end_at: datetime,
-    db: AsyncSession,
-    exclude_event_id: Optional[int] = None
+        participants: List[int],
+        start_at: datetime,
+        end_at: datetime,
+        db: AsyncSession,
+        exclude_event_id: Optional[int] = None
 ) -> Dict:
-    """Валидация доступности участников согласно ТЗ"""
-    
     conflicts = []
     unavailable_users = []
-    
+
     for user_id in participants:
-        # Проверка настроек доступности пользователя
+
         availability_res = await db.execute(
             select(UserAvailability).where(UserAvailability.user_id == user_id)
         )
         availability = availability_res.scalar_one_or_none()
-        
+
         if not availability:
-            # Если настройки нет, создаем стандартные
             availability = UserAvailability(
                 user_id=user_id,
                 work_start_time="09:00",
@@ -41,27 +35,25 @@ async def validate_participants_availability(
             db.add(availability)
             await db.commit()
             await db.refresh(availability)
-        
+
         if not availability.is_available:
             unavailable_users.append({
                 "user_id": user_id,
                 "reason": "Пользователь отмечен как недоступный"
             })
             continue
-        
-        # Проверка рабочего времени
+
         start_time = start_at.strftime("%H:%M")
         end_time = end_at.strftime("%H:%M")
-        
-        if (start_time < availability.work_start_time or 
-            end_time > availability.work_end_time):
+
+        if (start_time < availability.work_start_time or
+                end_time > availability.work_end_time):
             unavailable_users.append({
                 "user_id": user_id,
                 "reason": f"Вне рабочего времени ({availability.work_start_time}-{availability.work_end_time})"
             })
             continue
-        
-        # Проверка конфликтов с существующими событиями
+
         conflicts_query = select(CalendarEvent).where(
             and_(
                 CalendarEvent.user_id == user_id,
@@ -71,13 +63,13 @@ async def validate_participants_availability(
                 )
             )
         )
-        
+
         if exclude_event_id:
             conflicts_query = conflicts_query.where(CalendarEvent.id != exclude_event_id)
-        
+
         user_conflicts_res = await db.execute(conflicts_query)
         user_conflicts = user_conflicts_res.scalars().all()
-        
+
         if user_conflicts:
             conflicts.append({
                 "user_id": user_id,
@@ -91,9 +83,9 @@ async def validate_participants_availability(
                     for conflict in user_conflicts
                 ]
             })
-    
+
     is_valid = len(conflicts) == 0 and len(unavailable_users) == 0
-    
+
     return {
         "is_valid": is_valid,
         "conflicts": conflicts,
@@ -103,77 +95,68 @@ async def validate_participants_availability(
 
 
 async def suggest_alternative_times(
-    participants: List[int],
-    original_start: datetime,
-    original_end: datetime,
-    db: AsyncSession,
-    max_suggestions: int = 3
+        participants: List[int],
+        original_start: datetime,
+        original_end: datetime,
+        db: AsyncSession,
+        max_suggestions: int = 3
 ) -> List[Dict]:
-    """Предложение альтернативного времени для встречи"""
-    
     duration = original_end - original_start
     suggestions = []
-    
-    # Простая логика предложения времени: +1 час, -1 час, +2 часа
+
     time_offsets = [1, -1, 2]
-    
+
     for offset in time_offsets:
         if len(suggestions) >= max_suggestions:
             break
-            
+
         new_hour = original_start.hour + offset
         if new_hour < 0 or new_hour > 23:
             continue
-            
+
         new_start = original_start.replace(hour=new_hour)
         new_end = new_start + duration
-        
-        # Проверка доступности для нового времени
+
         validation = await validate_participants_availability(
             participants, new_start, new_end, db
         )
-        
+
         if validation["is_valid"]:
             suggestions.append({
                 "start_at": new_start.isoformat(),
                 "end_at": new_end.isoformat(),
                 "reason": f"Смещение на {offset} час(а)"
             })
-    
+
     return suggestions
 
 
 async def create_meeting_with_validation(
-    title: str,
-    description: Optional[str],
-    user_id: int,
-    participants: List[int],
-    start_at: datetime,
-    end_at: datetime,
-    location: Optional[str],
-    team_id: Optional[int],
-    org_unit_id: Optional[int],
-    db: AsyncSession
+        title: str,
+        description: Optional[str],
+        user_id: int,
+        participants: List[int],
+        start_at: datetime,
+        end_at: datetime,
+        location: Optional[str],
+        team_id: Optional[int],
+        org_unit_id: Optional[int],
+        db: AsyncSession
 ) -> Dict:
-    """Создание встречи с валидацией участников"""
-    
-    # Валидация времени
     if start_at >= end_at:
         raise ValueError("Время начала должно быть раньше времени окончания")
-    
-    # Валидация доступности участников
+
     validation = await validate_participants_availability(
         participants, start_at, end_at, db
     )
-    
+
     if not validation["is_valid"]:
         return {
             "success": False,
             "validation": validation,
             "message": "Не все участники доступны в указанное время"
         }
-    
-    # Создание события
+
     event = CalendarEvent(
         user_id=user_id,
         title=title,
@@ -186,12 +169,11 @@ async def create_meeting_with_validation(
         org_unit_id=org_unit_id,
         participants=json.dumps(participants) if participants else None
     )
-    
+
     db.add(event)
     await db.commit()
     await db.refresh(event)
-    
-    # Публикация события
+
     await publish_event("meeting.scheduled", {
         "event_id": event.id,
         "organizer_id": user_id,
@@ -201,7 +183,7 @@ async def create_meeting_with_validation(
         "team_id": team_id,
         "org_unit_id": org_unit_id
     })
-    
+
     return {
         "success": True,
         "event": event,
@@ -210,40 +192,30 @@ async def create_meeting_with_validation(
 
 
 async def check_user_permissions(
-    organizer_id: int,
-    participants: List[int],
-    team_id: Optional[int] = None,
-    org_unit_id: Optional[int] = None
+        organizer_id: int,
+        participants: List[int],
+        team_id: Optional[int] = None,
+        org_unit_id: Optional[int] = None
 ) -> bool:
-    """Проверка прав на создание встречи с участниками"""
-    
-    # Базовая проверка - организатор может создавать встречи с участниками из своей команды
-    # Здесь должна быть интеграция с Team Service для проверки иерархии
-    
     try:
-        # Пример запроса к Team Service для проверки прав
         async with httpx.AsyncClient() as client:
             response = await client.get(
                 f"http://team-service:8002/api/org_members/{organizer_id}/hierarchy"
             )
             if response.status_code == 200:
                 hierarchy = response.json()
-                # Логика проверки прав на основе иерархии
                 return True
     except Exception:
-        # Если Team Service недоступен, разрешаем создание встречи
         pass
-    
+
     return True
 
 
 async def notify_participants(
-    event_id: int,
-    participants: List[int],
-    event_details: Dict
+        event_id: int,
+        participants: List[int],
+        event_details: Dict
 ):
-    """Уведомление участников о встрече"""
-    
     for participant_id in participants:
         await publish_event("meeting.participant_invited", {
             "event_id": event_id,

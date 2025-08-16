@@ -61,8 +61,6 @@ class TaskEvaluation(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
-
-
 class UserPerformance(Base):
     __tablename__ = "user_performance"
 
@@ -71,7 +69,6 @@ class UserPerformance(Base):
     period_start = Column(Date, nullable=False)
     period_end = Column(Date, nullable=False)
 
-    # Основные метрики
     metrics = Column(JSON, nullable=False, default={
         "total_tasks": 0,
         "completed_tasks": 0,

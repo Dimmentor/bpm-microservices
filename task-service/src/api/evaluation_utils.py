@@ -1,6 +1,3 @@
-"""
-Утилиты для системы оценки и мотивации согласно ТЗ
-"""
 from typing import Dict, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, join
@@ -9,7 +6,6 @@ from src.db.models import TaskEvaluation, Task, UserPerformance
 from src.services.rabbitmq import publish_event
 
 
-# Критерии оценки согласно ТЗ
 EVALUATION_CRITERIA = {
     "соблюдение_сроков": "Соблюдение установленных сроков выполнения",
     "полнота_выполнения": "Полнота выполнения поставленной задачи", 
@@ -24,19 +20,14 @@ async def create_task_evaluation(
     feedback: Optional[str],
     db: AsyncSession
 ) -> TaskEvaluation:
-    """Создание оценки задачи с валидацией критериев из ТЗ"""
-    
-    # Валидация критериев
+
     for criterion in criteria_scores.keys():
         if criterion not in EVALUATION_CRITERIA:
             raise ValueError(f"Неизвестный критерий оценки: {criterion}")
-    
-    # Валидация оценок (1-5 баллов)
     for score in criteria_scores.values():
         if not isinstance(score, int) or score < 1 or score > 5:
             raise ValueError("Оценки должны быть целыми числами от 1 до 5")
-    
-    # Расчет средней оценки
+
     avg_score = sum(criteria_scores.values()) / len(criteria_scores)
     
     evaluation = TaskEvaluation(
@@ -50,8 +41,7 @@ async def create_task_evaluation(
     db.add(evaluation)
     await db.commit()
     await db.refresh(evaluation)
-    
-    # Публикация события
+
     await publish_event("task.evaluated", {
         "task_id": task_id,
         "evaluator_id": evaluator_id,
@@ -68,9 +58,6 @@ async def get_user_evaluation_matrix(
     period_end: str,
     db: AsyncSession
 ) -> Dict:
-    """Получение матрицы оценок пользователя согласно ТЗ"""
-    
-    # Получение всех оценок пользователя за период
     evaluations_res = await db.execute(
         select(TaskEvaluation).select_from(
             join(TaskEvaluation, Task, TaskEvaluation.task_id == Task.id)
@@ -90,8 +77,7 @@ async def get_user_evaluation_matrix(
             "average_scores": {},
             "overall_average": 0.0
         }
-    
-    # Расчет средних оценок по критериям
+
     criteria_totals = {}
     criteria_counts = {}
     
@@ -129,9 +115,7 @@ async def get_team_average_scores(
     period_end: str,
     db: AsyncSession
 ) -> Dict:
-    """Получение средних оценок по команде для сравнения"""
-    
-    # Получение всех оценок команды за период
+
     evaluations_res = await db.execute(
         select(TaskEvaluation).select_from(
             join(TaskEvaluation, Task, TaskEvaluation.task_id == Task.id)
@@ -145,8 +129,7 @@ async def get_team_average_scores(
     
     if not evaluations:
         return {"team_id": team_id, "average_scores": {}, "overall_average": 0.0}
-    
-    # Расчет средних оценок по критериям для команды
+
     criteria_totals = {}
     criteria_counts = {}
     
@@ -181,9 +164,7 @@ async def get_org_unit_average_scores(
     period_end: str,
     db: AsyncSession
 ) -> Dict:
-    """Получение средних оценок по подразделению для сравнения"""
-    
-    # Получение всех оценок подразделения за период
+
     evaluations_res = await db.execute(
         select(TaskEvaluation).select_from(
             join(TaskEvaluation, Task, TaskEvaluation.task_id == Task.id)
@@ -197,8 +178,7 @@ async def get_org_unit_average_scores(
     
     if not evaluations:
         return {"org_unit_id": org_unit_id, "average_scores": {}, "overall_average": 0.0}
-    
-    # Расчет средних оценок по критериям для подразделения
+
     criteria_totals = {}
     criteria_counts = {}
     

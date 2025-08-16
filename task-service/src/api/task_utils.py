@@ -25,8 +25,7 @@ async def update_task_status(
         raise ValueError("Task not found")
     
     update_data = {"status": new_status}
-    
-    # Автоматическое проставление времени
+
     if new_status == TaskStatus.IN_PROGRESS and not task.started_at:
         update_data["started_at"] = started_at or datetime.utcnow()
     elif new_status == TaskStatus.COMPLETED and not task.completed_at:
@@ -39,8 +38,7 @@ async def update_task_status(
     )
     await db.commit()
     await db.refresh(task)
-    
-    # Публикация события
+
     await publish_event("task.status_changed", {
         "task_id": task_id,
         "status": new_status.value,
@@ -58,9 +56,7 @@ async def validate_task_assignment(
     org_unit_id: Optional[int]
 ) -> bool:
     """Валидация назначения задачи согласно ТЗ - руководители могут ставить задачи подчиненным"""
-    
-    # Здесь должна быть проверка иерархии через Team Service
-    # Пока возвращаем True для базовой функциональности
+
     return True
 
 
